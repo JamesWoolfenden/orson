@@ -16,6 +16,8 @@ var matchListPython = []string{
 	"sse",  //might be too loose
 	"anthrophic",
 	"mcp[cli]",
+	"fastmcp",
+	"mcp", //might be too loose
 }
 
 // PyProject Updated struct to properly parse pyproject.toml
@@ -53,27 +55,23 @@ type PythonRequirement struct {
 func ExamPython(finding Finding) ([]Violation, error) {
 
 	var violations []Violation
+	var err error
 
 	switch finding.Dependency {
 	case "requirements.txt":
-		violations, err := parseRequirementsTxt(finding)
+		violations, err = parseRequirementsTxt(finding)
 		if err != nil {
 			return violations, err
 		}
 	case "pyproject.toml":
-		violations, err := parsePyProject(finding)
+		violations, err = parsePyProject(finding)
 		if err != nil {
 			return violations, err
 		}
 	default:
 
 	}
-	if finding.Dependency != "requirements.txt" {
-		return violations, nil
-	}
-
 	return violations, nil
-
 }
 
 func parseRequirementsTxt(finding Finding) ([]Violation, error) {
@@ -138,7 +136,7 @@ func parseLine(line string) PythonRequirement {
 	version := ""
 
 	if len(parts) > 1 {
-		// Join the rest as version specification
+		// Join the rest as a version specification
 		version = strings.TrimSpace(strings.Join(parts[1:], ""))
 	}
 
@@ -155,6 +153,17 @@ func parsePyProject(finding Finding) ([]Violation, error) {
 	_, err := toml.DecodeFile(finding.Path, &config)
 	if err != nil {
 		return violations, fmt.Errorf("failed to parse pyproject.toml: %w", err)
+	}
+
+	//if it's the actual project, that's an MCP server, and we only need this once
+	for _, match := range matchListPython {
+		if strings.Contains(strings.ToLower(config.Project.Name), strings.ToLower(match)) {
+			violations = append(violations, Violation{
+				Finding:    finding,
+				Dependency: config.Project.Name,
+			})
+			break
+		}
 	}
 
 	// Check dependencies in project.dependencies
@@ -202,5 +211,4 @@ func parsePyProject(finding Finding) ([]Violation, error) {
 	}
 
 	return violations, nil
-
 }

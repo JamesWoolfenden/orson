@@ -2,19 +2,24 @@ package main
 
 import (
 	"fmt"
-	"orson/src"
+	orson "orson/src"
 
 	"github.com/rs/zerolog/log"
+	"moul.io/banner"
 )
 
 func main() {
+	fmt.Println(banner.Inline("orson"))
+
 	// Start searching from the current directory
-	root := "e:/examples/"
+	root := "/Users/jwoolfenden/code"
 
 	// Directories to skip
 	ignoreDirs := map[string]bool{
-		".git":       true,
-		".terraform": true,
+		".git":              true,
+		".terraform":        true,
+		".terragrunt-cache": true,
+		".venv":             true,
 	}
 
 	// Common dependency management files across different languages and tools
@@ -47,8 +52,8 @@ func main() {
 
 		// .NET
 		"packages.config": ".NET NuGet (legacy)",
-		"*.csproj":        ".NET project",
-		"*.fsproj":        "F# project",
+		//"*.csproj":        ".NET project",
+		//"*.fsproj":        "F# project",
 
 		// Rust
 		"Cargo.toml": "Rust cargo",
@@ -81,8 +86,12 @@ func main() {
 	for _, finding := range Findings {
 		switch finding.Dependency {
 		case "requirements.txt", "Pipfile", "pyproject.toml", "Pipfile.lock", "poetry.lock":
-			fmt.Printf("Python: %s\n", finding.Path)
-		case "package.json", "yarn.lock", "pnpm-lock.yaml":
+			pythonViolations, err := orson.ExamPython(finding)
+			if err != nil {
+				log.Fatal().Err(err).Msg("Error finding Go dependencies")
+			}
+			violations = append(violations, pythonViolations...)
+		case "package.json", "yarn.lock", "pnpm-lock.yaml", "package-lock.json":
 			packageViolations, err := orson.ExamJS(finding)
 			if err != nil {
 				log.Fatal().Err(err).Msg("Error finding JS dependencies")
@@ -95,7 +104,7 @@ func main() {
 			}
 			violations = append(violations, goViolations...)
 		case "Gemfile":
-			fmt.Printf("Ruby: %s\n", finding.Path)
+			examRuby(finding)
 		case "pom.xml", "build.gradle", "build.gradle.kts":
 			fmt.Printf("Java/Kotlin: %s\n", finding.Path)
 		case "deps.edn", "project.clj", "sbt", "mix.exs", "rebar.config":
@@ -106,9 +115,21 @@ func main() {
 			fmt.Printf("PHP: %s\n", finding.Path)
 		case "packages.config":
 			fmt.Printf(".NET: %s\n", finding.Path)
+		case "":
 		default:
 			fmt.Printf("Unknown dependency: %s\n", finding.Dependency)
 		}
 	}
 
+	writeViolations(violations)
+}
+
+func examRuby(finding orson.Finding) (int, error) {
+	return fmt.Printf("Ruby: %s\n", finding.Path)
+}
+
+func writeViolations(violations []orson.Violation) {
+	for _, violation := range violations {
+		fmt.Printf("%s %s: %s\n", violation.Path, violation.Dependency, violation.Style)
+	}
 }

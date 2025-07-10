@@ -12,34 +12,37 @@ import (
 var matchListPython = []string{
 	"modelcontextprotocol",
 	"mcp-server",
-	"-mcp", //might be too lose
-	"sse",  //might be too lose
+	"-mcp", //might be too loose
+	"sse",  //might be too loose
 	"anthrophic",
 	"mcp[cli]",
 }
 
-type pyproject struct {
-	Project map[string]project
-	//[build-system]
-	//	requires = ["setuptools>=61.0"]
-	//	build-backend = "setuptools.build_meta"
-	//
-	//[project]
-	//	name='aisbtokenizers'
-	//	version='0.0.1'
-	//	description='Tokenizers library'
-	//	authors= [{ name="James Woolfenden", email='jwoolfenden@paloaltonetworks.com'},]
-	//	readme = "README.md"
-	//	requires-python = ">=3.10"
+// PyProject Updated struct to properly parse pyproject.toml
+type PyProject struct {
+	Project     Project     `toml:"project"`
+	BuildSystem BuildSystem `toml:"build-system"`
 }
 
-type project struct {
-	Name string
-	//version='0.0.1'
-	//description='Tokenizers library'
-	//authors= [{ name="James Woolfenden", email='jwoolfenden@paloaltonetworks.com'},]
-	//readme = "README.md"
-	//requires-python = ">=3.10"
+type Project struct {
+	Name           string              `toml:"name"`
+	Version        string              `toml:"version"`
+	Description    string              `toml:"description"`
+	Authors        []Author            `toml:"authors"`
+	Readme         string              `toml:"readme"`
+	RequiresPython string              `toml:"requires-python"`
+	Dependencies   []string            `toml:"dependencies"`
+	OptionalDeps   map[string][]string `toml:"optional-dependencies"`
+}
+
+type Author struct {
+	Name  string `toml:"name"`
+	Email string `toml:"email"`
+}
+
+type BuildSystem struct {
+	Requires     []string `toml:"requires"`
+	BuildBackend string   `toml:"build-backend"`
 }
 
 type PythonRequirement struct {
@@ -147,22 +150,57 @@ func parseLine(line string) PythonRequirement {
 
 func parsePyProject(finding Finding) ([]Violation, error) {
 	var violations []Violation
-	fmt.Println(finding.Path)
+	var config PyProject
 
-	var config pyproject
-	Pyproject, err := toml.DecodeFile(finding.Path, &config)
-
+	_, err := toml.DecodeFile(finding.Path, &config)
 	if err != nil {
-		return violations, err
+		return violations, fmt.Errorf("failed to parse pyproject.toml: %w", err)
 	}
 
-	fmt.Println(Pyproject)
+	// Check dependencies in project.dependencies
+	for _, dep := range config.Project.Dependencies {
+		req := parseLine(dep)
+		for _, match := range matchListPython {
+			if strings.Contains(strings.ToLower(req.Name), strings.ToLower(match)) {
+				violations = append(violations, Violation{
+					Finding:    finding,
+					Dependency: req.Name,
+				})
+				break
+			}
+		}
+	}
 
-	//file, err := os.Open(finding.Path)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//defer file.Close()
-	//
+	// Check optional dependencies
+	for group, deps := range config.Project.OptionalDeps {
+		for _, dep := range deps {
+			req := parseLine(dep)
+			for _, match := range matchListPython {
+				if strings.Contains(strings.ToLower(req.Name), strings.ToLower(match)) {
+					violations = append(violations, Violation{
+						Finding:    finding,
+						Dependency: fmt.Sprintf("%s (optional: %s)", req.Name, group),
+					})
+					break
+				}
+			}
+		}
+	}
+
+	// Check build system requirements
+	for _, dep := range config.BuildSystem.Requires {
+		req := parseLine(dep)
+		for _, match := range matchListPython {
+			if strings.Contains(strings.ToLower(req.Name), strings.ToLower(match)) {
+				violations = append(violations, Violation{
+					Finding:    finding,
+					Dependency: fmt.Sprintf("%s (build)", req.Name),
+				})
+				break
+			}
+		}
+	}
+
 	return violations, nil
+
 }

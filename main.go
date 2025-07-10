@@ -104,7 +104,12 @@ func main() {
 			}
 			violations = append(violations, goViolations...)
 		case "Gemfile":
-			examRuby(finding)
+			rubyViolations, err := examRuby(finding)
+			if err != nil {
+				log.Fatal().Err(err).Msg("Error finding Go dependencies")
+			}
+			violations = append(violations, rubyViolations...)
+
 		case "pom.xml", "build.gradle", "build.gradle.kts":
 			fmt.Printf("Java/Kotlin: %s\n", finding.Path)
 		case "deps.edn", "project.clj", "sbt", "mix.exs", "rebar.config":
@@ -124,8 +129,9 @@ func main() {
 	writeViolations(violations)
 }
 
-func examRuby(finding orson.Finding) (int, error) {
-	return fmt.Printf("Ruby: %s\n", finding.Path)
+func examRuby(finding orson.Finding) ([]orson.Violation, error) {
+	var violations []orson.Violation
+	return violations, nil
 }
 
 func writeViolations(violations []orson.Violation) {

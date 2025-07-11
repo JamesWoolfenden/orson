@@ -88,7 +88,7 @@ func main() {
 		case "requirements.txt", "Pipfile", "pyproject.toml", "Pipfile.lock", "poetry.lock":
 			pythonViolations, err := orson.ExamPython(finding)
 			if err != nil {
-				log.Fatal().Err(err).Msg("Error finding Go dependencies")
+				log.Fatal().Err(err).Msg("Error finding Python dependencies")
 			}
 			violations = append(violations, pythonViolations...)
 		case "package.json", "yarn.lock", "pnpm-lock.yaml", "package-lock.json":
@@ -120,7 +120,6 @@ func main() {
 			fmt.Printf("PHP: %s\n", finding.Path)
 		case "packages.config":
 			fmt.Printf(".NET: %s\n", finding.Path)
-		case "":
 		default:
 			fmt.Printf("Unknown dependency: %s\n", finding.Dependency)
 		}

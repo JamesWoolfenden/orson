@@ -14,9 +14,9 @@ var matchListGo = []string{
 	"mcp-server",
 	"mcp-golang",
 	"mcp-go",
-	"-mcp", //might be too lose
+	"-mcp", //might be too loose
 	"gin-contrib/sse",
-	"sse", //might be too lose
+	"sse", //might be too loose
 }
 
 func ExamGo(finding Finding) ([]Violation, error) {

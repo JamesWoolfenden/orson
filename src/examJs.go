@@ -34,7 +34,7 @@ var matchListJS = []string{
 	"context7-mcp",
 	"n8n-nodes-mcp",
 	"browsermcp/mcp",
-	"-mcp", //might be too lose
+	"-mcp", //might be too loose
 }
 
 func ExamJS(finding Finding) ([]Violation, error) {

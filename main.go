@@ -3,138 +3,83 @@ package main
 import (
 	"fmt"
 	orson "orson/src"
+	"orson/src/version"
+	"os"
+	"sort"
+	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+
+	"github.com/urfave/cli/v2"
 	"moul.io/banner"
 )
 
 func main() {
 	fmt.Println(banner.Inline("orson"))
+	fmt.Println("version:", version.Version)
 
-	// Start searching from the current directory
-	root := "/Users/jwoolfenden/code"
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
-	// Directories to skip
-	ignoreDirs := map[string]bool{
-		".git":              true,
-		".terraform":        true,
-		".terragrunt-cache": true,
-		".venv":             true,
+	var (
+		directory string
+	)
+
+	app := &cli.App{
+		EnableBashCompletion: true,
+		Flags:                []cli.Flag{},
+		UsageText:            "Orson is a CLI for investigating Model Context Protocol content",
+		Commands: []*cli.Command{
+			{
+				Name:    "scan",
+				Aliases: []string{"m"},
+				Usage:   "scan files in folders for package managers and examine and report for MCP",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:        "directory",
+						Aliases:     []string{"d"},
+						Usage:       "Directory to scan (defaults to .)",
+						Value:       ".",
+						Destination: &directory,
+					},
+				},
+				Action: func(*cli.Context) error {
+					//arn, err :=
+					orson.GetViolations(directory)
+					//if err != nil {
+					//	return fmt.Errorf("make failed: %w", err)
+					//}
+
+					//if arn != nil {
+					//	fmt.Print(*arn)
+					//}
+
+					return nil
+				},
+			},
+			{
+				Name:      "version",
+				Aliases:   []string{"v"},
+				Usage:     "Outputs the application version",
+				UsageText: "orson version",
+				Action: func(*cli.Context) error {
+					fmt.Println(version.Version)
+
+					return nil
+				},
+			},
+		},
+		Name:     "orson",
+		Usage:    "Examine codebase for MCP",
+		Compiled: time.Time{},
+		Authors:  []*cli.Author{{Name: "James Woolfenden", Email: "james.woolfenden@gmail.com"}},
+		Version:  version.Version,
 	}
 
-	// Common dependency management files across different languages and tools
-	targetFiles := map[string]string{
-		// Go
-		"go.mod": "Go modules",
-		"go.sum": "Go modules checksum",
+	sort.Sort(cli.FlagsByName(app.Flags))
+	sort.Sort(cli.CommandsByName(app.Commands))
 
-		// Python
-		"requirements.txt": "Python pip",
-		"Pipfile":          "Python pipenv",
-		"pyproject.toml":   "Python poetry/modern Python packaging",
-		"Pipfile.lock":     "Python pipenv lock",
-		"poetry.lock":      "Python poetry lock",
-
-		// Node.js
-		"package.json":      "Node.js npm/yarn",
-		"package-lock.json": "Node.js npm lock",
-		"yarn.lock":         "Yarn lock",
-		"pnpm-lock.yaml":    "pnpm lock",
-
-		// Ruby
-		"Gemfile":      "Ruby bundler",
-		"Gemfile.lock": "Ruby bundler lock",
-
-		// Java/Kotlin
-		"pom.xml":          "Maven",
-		"build.gradle":     "Gradle",
-		"build.gradle.kts": "Gradle Kotlin",
-
-		// .NET
-		"packages.config": ".NET NuGet (legacy)",
-		//"*.csproj":        ".NET project",
-		//"*.fsproj":        "F# project",
-
-		// Rust
-		"Cargo.toml": "Rust cargo",
-		"Cargo.lock": "Rust cargo lock",
-
-		// PHP
-		"composer.json": "PHP Composer",
-		"composer.lock": "PHP Composer lock",
-
-		//// Terraform
-		//"terraform.tfstate": "Terraform state",
-		//"*.tf":             "Terraform configuration",
-
-		// Other
-		"deps.edn":     "Clojure deps",
-		"project.clj":  "Clojure Leiningen",
-		"sbt":          "Scala build tool",
-		"mix.exs":      "Elixir mix",
-		"rebar.config": "Erlang rebar",
-	}
-
-	Findings, err := orson.FindDependencies(root, ignoreDirs, targetFiles)
-
-	if err != nil {
-		log.Fatal().Err(err).Msg("Error finding dependencies")
-	}
-
-	var violations []orson.Violation
-
-	for _, finding := range Findings {
-		switch finding.Dependency {
-		case "requirements.txt", "Pipfile", "pyproject.toml", "Pipfile.lock", "poetry.lock":
-			pythonViolations, err := orson.ExamPython(finding)
-			if err != nil {
-				log.Fatal().Err(err).Msg("Error finding Python dependencies")
-			}
-			violations = append(violations, pythonViolations...)
-		case "package.json", "yarn.lock", "pnpm-lock.yaml", "package-lock.json":
-			packageViolations, err := orson.ExamJS(finding)
-			if err != nil {
-				log.Fatal().Err(err).Msg("Error finding JS dependencies")
-			}
-			violations = append(violations, packageViolations...)
-		case "go.mod", "go.sum":
-			goViolations, err := orson.ExamGo(finding)
-			if err != nil {
-				log.Fatal().Err(err).Msg("Error finding Go dependencies")
-			}
-			violations = append(violations, goViolations...)
-		case "Gemfile":
-			rubyViolations, err := examRuby(finding)
-			if err != nil {
-				log.Fatal().Err(err).Msg("Error finding Go dependencies")
-			}
-			violations = append(violations, rubyViolations...)
-
-		case "pom.xml", "build.gradle", "build.gradle.kts":
-			fmt.Printf("Java/Kotlin: %s\n", finding.Path)
-		case "deps.edn", "project.clj", "sbt", "mix.exs", "rebar.config":
-			fmt.Printf("Clojure: %s\n", finding.Path)
-		case "Cargo.toml", "Cargo.lock":
-			fmt.Printf("Rust: %s\n", finding.Path)
-		case "composer.json", "composer.lock":
-			fmt.Printf("PHP: %s\n", finding.Path)
-		case "packages.config":
-			fmt.Printf(".NET: %s\n", finding.Path)
-		default:
-			fmt.Printf("Unknown dependency: %s\n", finding.Dependency)
-		}
-	}
-
-	writeViolations(violations)
-}
-
-func examRuby(finding orson.Finding) ([]orson.Violation, error) {
-	var violations []orson.Violation
-	return violations, nil
-}
-
-func writeViolations(violations []orson.Violation) {
-	for _, violation := range violations {
-		fmt.Printf("%s %s: %s\n", violation.Path, violation.Dependency, violation.Style)
+	if err := app.Run(os.Args); err != nil {
+		log.Fatal().Err(err)
 	}
 }

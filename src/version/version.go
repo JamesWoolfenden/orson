@@ -1,4 +1,4 @@
-package orson
+package version
 
 // Version controls the applications version
 //
